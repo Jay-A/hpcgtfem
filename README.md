@@ -54,12 +54,13 @@ hpcgtfem/
 ├── docs/                   # Theory and documentation
 ├── scripts/                # Reproducibility scripts
 ├── examples/               # Minimal runnable examples
+<<<<<<< HEAD
 └── data/                   # Reference meshes and datasets (optional)
 ```
 
 ---
 
-# 🚀 Setup and Installation
+# Setup and Installation
 
 This project uses a standard Python **src-layout** together with a virtual environment and an editable installation for development.
 
@@ -143,10 +144,10 @@ If this executes successfully, the development environment has been configured c
 
 If you intend to work in Jupyter notebooks, install an IPython kernel for the virtual environment:
 
-REMOVE`bash
+```bash
 pip install ipykernel
 python -m ipykernel install --user --name localtfem
-REMOVE`
+```
 
 Then select the **localtfem** kernel when opening notebooks.
 
@@ -156,16 +157,18 @@ Then select the **localtfem** kernel when opening notebooks.
 
 After cloning the repository, the complete setup is:
 
-REMOVE```bash
+```bash
 python -m venv .venv
+```
 
 # Windows PowerShell
 
+```powershell
 .venv\Scripts\Activate.ps1
 
 pip install -r requirements.txt
 pip install -e .
-REMOVE```
+```
 
 ---
 
@@ -202,3 +205,8 @@ Appleton, M. A., & Helenbrook, B. T. (2019).
 *A High-Order Lower-Triangular Pseudo-Mass Matrix for Explicit Time Advancement of hp Triangular Finite Element Methods.*
 
 https://arxiv.org/abs/1906.10774
+=======
+│   ├── single_element_demo.py
+│   └── small_mesh_demo.py
+│
+└── data/                   # Reference meshes and datasets (optional)
