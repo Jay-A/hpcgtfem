@@ -37,14 +37,13 @@ modified_dubiner/
 ├── .env.example            # Environment configuration template
 │
 ├── src/                    # Core library (source of truth)
-│   └── modified_dubiner/
-│       ├── jacobi.py       # Jacobi polynomial utilities
-│       ├── basis.py        # Modified Dubiner basis construction
-│       ├── mass.py         # Exact FEM mass matrix assembly
-│       ├── transform.py    # Basis transformations (T operator)
-│       ├── pseudo_mass.py  # Lower-triangular / decoupled operator (L)
-│       ├── mesh.py         # Triangular mesh generation
-│       └── heat.py         # Heat equation solver prototype
+│   ├── jacobi.py       # Jacobi polynomial utilities
+│   ├── basis.py        # Modified Dubiner basis construction
+│   ├── mass.py         # Exact FEM mass matrix assembly
+│   ├── transform.py    # Basis transformations (T operator)
+│   ├── pseudo_mass.py  # Lower-triangular / decoupled operator (L)
+│   ├── mesh.py         # Triangular mesh generation
+│   └── heat.py         # Heat equation solver prototype
 │
 ├── tests/                  # Unit tests for mathematical correctness
 │
