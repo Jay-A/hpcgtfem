@@ -1,0 +1,35 @@
+cff-version: 1.2.0
+
+message: "If you use this software, please cite the software and the underlying method paper."
+
+title: "hp-CG-TFEM: Triangularized Continuous Galerkin Finite Element Method with Pseudo-Mass Factorization"
+
+version: 0.1.0
+
+date-released: 2026-06-25
+
+authors:
+  - family-names: Appleton
+    given-names: Jay
+
+preferred-citation:
+  type: software
+  authors:
+    - family-names: Appleton
+      given-names: Jay
+  title: "hp-CG-TFEM: Triangularized Continuous Galerkin Finite Element Method with Pseudo-Mass Factorization"
+  year: 2026
+  version: 0.1.0
+  url: "https://github.com/Jay-A/hpcgtfem"
+
+references:
+  - type: article
+    title: "A High-Order Lower-Triangular Pseudo-Mass Matrix for Explicit Time Advancement of hp Triangular Finite Element Methods"
+    authors:
+      - family-names: Appleton
+        given-names: Jay
+      - family-names: Helenbrook
+        given-names: Brian
+    year: 2019
+    url: "https://arxiv.org/abs/1906.10774"
+    collection-type: preprint

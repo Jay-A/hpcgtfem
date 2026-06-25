@@ -1,0 +1,46 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# build / packaging
+build/
+dist/
+*.egg-info/
+
+# IDEs
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# env files (secrets)
+.env
+
+# logs
+*.log
+
+# data / large outputs (optional but recommended)
+data/
+outputs/
+results/
+
+# temporary files
+*.tmp
+*.bak
