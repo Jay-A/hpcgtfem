@@ -1,132 +1,296 @@
 """
 dubiner_sym.py
 
-Symbolic mirror of DubinerBasis (FEM-consistent ordering)
+Symbolic mirror of DubinerBasis.
 
-This is NOT a mathematical textbook Dubiner basis.
-It is a symbolic replica of the FEM implementation in dubiner.py.
+This file is intended to match the numerical implementation in
+dubiner.py exactly, including
+
+    * basis ordering
+    * Jacobi polynomial parameters
+    * edge families
+    * interior families
+    * weighting factors
+
+so that symbolic evaluation agrees with DubinerBasis.evaluate().
 """
 
 from __future__ import annotations
 
-from sympy import symbols, Rational, expand, simplify, legendre
+from sympy import Rational, expand, simplify, symbols, Matrix
+from sympy.functions.special.polynomials import jacobi
+
+
+import sympy as sp
+
+r, s = sp.symbols("r s")
 
 xi, eta = symbols("xi eta")
 
 
-# ------------------------------------------------------------
-# Jacobi (keep SymPy, but only as symbolic generator)
-# ------------------------------------------------------------
+# ---------------------------------------------------------------------
+# Jacobi polynomial helper
+# ---------------------------------------------------------------------
 
 def jacobi_P(n, alpha, beta, x):
-    from sympy.functions.special.polynomials import jacobi
+    """Symbolic Jacobi polynomial."""
     return jacobi(n, alpha, beta, x)
 
 
-# ------------------------------------------------------------
-# Vertex modes (MUST match numerical definitions)
-# ------------------------------------------------------------
+# ---------------------------------------------------------------------
+# Vertex modes
+# ---------------------------------------------------------------------
 
 def vertex_modes():
-    """
-    A, B, C vertex modes (match DubinerBasis exactly)
-    """
-
-    A = (1 + eta) / 2
-    B = (1 - xi) * (1 - eta) / 4
-    C = (1 + xi) * (1 - eta) / 4
-
-    return [A, B, C]
+    return [
+        (1 + eta) / 2,
+        (1 - xi) * (1 - eta) / 4,
+        (1 + xi) * (1 - eta) / 4,
+    ]
 
 
-# ------------------------------------------------------------
-# Edge mode (symbolic mirror of coefficient structure)
-# ------------------------------------------------------------
+# ---------------------------------------------------------------------
+# Edge modes
+# ---------------------------------------------------------------------
 
-def edge_mode_m(m, alpha=2, beta=2):
-    """
-    Symbolic proxy of edge A_m / B_m / C_m structure.
+def edge_mode_A(m):
 
-    IMPORTANT:
-    This is still simplified but now matches FEM scaling idea.
-    """
+    P = jacobi_P(m - 1, 2, 2, xi)
 
-    Pm = jacobi_P(m, alpha, beta, xi)
-
-    # FEM-style edge weighting (match numerical powers of 1/2)
-    weight = ((1 - eta) / 2) ** (m + 2)
-
-    return simplify(expand(Pm * weight))
+    return simplify(expand(
+        ((1 + xi) / 2)
+        * ((1 - xi) / 2)
+        * P
+        * ((1 - eta) / 2) ** (m + 1)
+    ))
 
 
-# ------------------------------------------------------------
-# Interior mode (Helenbrook structure placeholder)
-# ------------------------------------------------------------
+def edge_mode_B(m):
 
-def interior_mode(m, n, alpha=2, beta=2):
-    """
-    Symbolic interior mode aligned with FEM ordering.
-    """
+    P = jacobi_P(m - 1, 2, 2, eta)
 
-    Pm = jacobi_P(m, alpha, beta, xi)
-
-    Pn = jacobi_P(n, 2 * m + 1, beta, eta)
-
-    weight = ((1 - xi) * (1 + xi) / 4) * ((1 - eta) / 2) ** (m + 2)
-
-    return simplify(expand(Pm * Pn * weight))
+    return simplify(expand(
+        ((1 + xi) / 2)
+        * ((1 - eta) / 2)
+        * ((1 + eta) / 2)
+        * P
+    ))
 
 
-# ------------------------------------------------------------
-# Full basis (MATCHES DubinerBasis ordering)
-# ------------------------------------------------------------
+def edge_mode_C(m):
 
-def dubiner_basis(p, alpha=2, beta=2):
-    """
-    Returns symbolic basis ordered EXACTLY like DubinerBasis:
-        [vertex A, B, C,
-         edge A_m, B_m, C_m,
-         interior (m,n)]
-    """
+    P = jacobi_P(m - 1, 2, 2, eta)
+
+    return simplify(expand(
+        (-1) ** (m - 1)
+        * ((1 - xi) / 2)
+        * ((1 - eta) / 2)
+        * ((1 + eta) / 2)
+        * P
+    ))
+
+
+# ---------------------------------------------------------------------
+# Interior modes
+# ---------------------------------------------------------------------
+
+def interior_mode(m, n):
+
+    Pxi = jacobi_P(m, 2, 2, xi)
+    Peta = jacobi_P(n, 2 * m + 5, 2, eta)
+
+    return simplify(expand(
+        ((1 - xi) / 2)
+        * ((1 + xi) / 2)
+        * Pxi
+        * ((1 - eta) / 2) ** (m + 2)
+        * ((1 + eta) / 2)
+        * Peta
+    ))
+
+
+# ---------------------------------------------------------------------
+# Full basis
+# ---------------------------------------------------------------------
+
+def dubiner_basis(p):
 
     basis = []
 
-    # -------------------------
-    # vertices
-    # -------------------------
+    # Vertices
     basis.extend(vertex_modes())
 
-    # -------------------------
-    # edges
-    # -------------------------
-    for m in range(p - 1):
-        basis.append(edge_mode_m(m, alpha, beta))  # A-type (representative)
+    # Edges
+    for m in range(1, p):
+        basis.append(edge_mode_A(m))
+        basis.append(edge_mode_B(m))
+        basis.append(edge_mode_C(m))
 
-        basis.append(edge_mode_m(m, alpha, beta))  # B-type (simplified mirror)
-
-        basis.append(edge_mode_m(m, alpha, beta))  # C-type (simplified mirror)
-
-    # -------------------------
-    # interior (Helenbrook indexing)
-    # -------------------------
+    # Interior
     for m in range(p - 2):
         for n in range(p - 2 - m):
-            basis.append(interior_mode(m, n, alpha, beta))
+            basis.append(interior_mode(m, n))
 
     return basis
 
 
-# ------------------------------------------------------------
-# Jacobian for triangle mapping
-# ------------------------------------------------------------
+# ---------------------------------------------------------------------
+# Jacobian determinant (triangle collapse mapping)
+# ---------------------------------------------------------------------
 
-def jacobian(xi):
-    return Rational(1, 2) * (1 - xi)
+def jacobian():
+    """
+    Determinant of triangle collapse map:
+
+        r = 0.5*(xi+1)*(1-eta) - 1
+        s = eta
+    """
+    return Rational(1, 2) * (1 - eta)
 
 
-# ------------------------------------------------------------
-# evaluation helper
-# ------------------------------------------------------------
+# ---------------------------------------------------------------------
+# Evaluation helper
+# ---------------------------------------------------------------------
 
 def eval_basis(basis, xi_val, eta_val):
-    return [b.subs({xi: xi_val, eta: eta_val}) for b in basis]
+
+    return [
+        simplify(b.subs({xi: xi_val, eta: eta_val}))
+        for b in basis
+    ]
+
+
+# ---------------------------------------------------------------------
+# SYMBOLIC REFERENCE MASS MATRIX
+# ---------------------------------------------------------------------
+
+def symbolic_mass_matrix(p, integrate=True):
+    """
+    Symbolic reference mass matrix:
+
+        M_ij = ∫∫ φ_i(ξ,η) φ_j(ξ,η) (1/2)(1-η) dξ dη
+
+    Parameters
+    ----------
+    p : polynomial order
+    integrate : bool
+        False -> return symbolic integrand matrix
+        True  -> perform exact symbolic integration (slow)
+    """
+
+    import sympy as sp
+
+    basis = dubiner_basis(p)
+
+    weight = Rational(1, 2) * (1 - eta)
+
+    n = len(basis)
+
+    M = Matrix(n, n, lambda i, j: 0)
+
+    for i in range(n):
+        for j in range(n):
+
+            integrand = simplify(basis[i] * basis[j] * weight)
+
+            if not integrate:
+                M[i, j] = integrand
+            else:
+                M[i, j] = simplify(
+                    sp.integrate(
+                        sp.integrate(integrand, (xi, -1, 1)),
+                        (eta, -1, 1)
+                    )
+                )
+
+    return M
+
+def symbolic_stiffness_matrix(p, integrate=True):
+    """
+    Symbolic reference stiffness matrix:
+
+        K_ij = ∫ (∇φ_i · ∇φ_j) J(η) dξ dη
+    """
+
+    import sympy as sp
+
+    basis = dubiner_basis(p)
+    J = Rational(1, 2) * (1 - eta)
+
+    n = len(basis)
+    K = Matrix(n, n, lambda i, j: 0)
+
+    for i in range(n):
+        for j in range(n):
+
+            dphii_xi = sp.diff(basis[i], xi)
+            dphii_eta = sp.diff(basis[i], eta)
+
+            dphij_xi = sp.diff(basis[j], xi)
+            dphij_eta = sp.diff(basis[j], eta)
+
+            integrand = simplify(
+                (dphii_xi * dphij_xi +
+                 dphii_eta * dphij_eta) * J
+            )
+
+            if not integrate:
+                K[i, j] = integrand
+            else:
+                K[i, j] = simplify(
+                    sp.integrate(
+                        sp.integrate(integrand, (xi, -1, 1)),
+                        (eta, -1, 1)
+                    )
+                )
+
+    return K    
+
+# ------------------------------------------------------------
+# mapping from collapsed triangle
+# ------------------------------------------------------------
+def xi_map(r, s):
+    return -1 + 2*(1 + r)/(1 - s)
+
+def eta_map(r, s):
+    return s
+
+
+# ------------------------------------------------------------
+# derivatives of mapping
+# ------------------------------------------------------------
+def dxi_dr(s):
+    return 2/(1 - s)
+
+def dxi_ds(r, s):
+    return 2*(1 + r)/(1 - s)**2
+
+def deta_dr():
+    return 0
+
+def deta_ds():
+    return 1
+
+
+# ------------------------------------------------------------
+# reference gradient builder
+# ------------------------------------------------------------
+def reference_gradient(phi_xi, phi_eta):
+    """
+    Converts (xi,eta)-gradients into (r,s)-gradients.
+    """
+
+    def grad_r(r_val, s_val):
+        return (
+            phi_xi.subs({xi: xi_map(r_val, s_val), eta: eta_map(r_val, s_val)})
+            * dxi_dr(s_val)
+        )
+
+    def grad_s(r_val, s_val):
+        return (
+            phi_xi.subs({xi: xi_map(r_val, s_val), eta: eta_map(r_val, s_val)})
+            * dxi_ds(r_val, s_val)
+            + phi_eta.subs({xi: xi_map(r_val, s_val), eta: eta_map(r_val, s_val)})
+        )
+
+    return grad_r, grad_s    
