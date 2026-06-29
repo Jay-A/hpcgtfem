@@ -1,7 +1,7 @@
 import numpy as np
 
-from .lobatto import lglnodes
-from .radau import lgrnodes
+from .lglnodes import lglnodes
+from .lgrnodes import lgrnodes
 
 
 def RefTriQuad(p):

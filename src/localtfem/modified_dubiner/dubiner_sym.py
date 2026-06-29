@@ -133,6 +133,15 @@ def dubiner_basis(p):
 
     return basis
 
+def dubiner_basis_lambdified(p):
+    xi, eta = sp.symbols("xi eta")
+
+    symbolic_basis = dubiner_basis(p)
+
+    return [
+        sp.lambdify((xi, eta), phi, "numpy")
+        for phi in symbolic_basis
+    ]
 
 # ---------------------------------------------------------------------
 # Jacobian determinant (triangle collapse mapping)

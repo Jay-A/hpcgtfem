@@ -29,16 +29,8 @@ def poly_derivative(coeffs):
     return np.array([i * coeffs[i] for i in range(1, n)])
 
 
-def jacobi_pair(coeffs):
-    """Return (P, dP) from coefficient vector"""
-    return (
-        lambda x: poly_eval(coeffs, x),
-        lambda x: poly_eval(poly_derivative(coeffs), x)
-    )
-
-
 # ============================================================
-# mode container (MATLAB-STYLE: explicit derivatives)
+# mode container
 # ============================================================
 
 @dataclass
@@ -46,12 +38,6 @@ class DubinerMode:
     phi: Callable
     dxi: Callable
     deta: Callable
-
-    def evaluate(self, xi, eta):
-        return self.phi(xi, eta)
-
-    def gradient(self, xi, eta):
-        return self.dxi(xi, eta), self.deta(xi, eta)
 
 
 # ============================================================
@@ -77,7 +63,7 @@ class DubinerBasis:
         out = np.zeros(xi.shape + (n,), dtype=float)
 
         for i, m in enumerate(self.modes):
-            out[..., i] = m.evaluate(xi, eta)
+            out[..., i] = m.phi(xi, eta)
 
         return out
 
@@ -86,37 +72,36 @@ class DubinerBasis:
         eta = np.asarray(eta, dtype=float)
 
         n = len(self.modes)
-        gx = np.zeros(xi.shape + (n,))
-        gy = np.zeros(xi.shape + (n,))
+        gx = np.zeros(xi.shape + (n,), dtype=float)
+        gy = np.zeros(xi.shape + (n,), dtype=float)
 
         for i, m in enumerate(self.modes):
-            dx, dy = m.gradient(xi, eta)
-            gx[..., i] = dx
-            gy[..., i] = dy
+            gx[..., i] = m.dxi(xi, eta)
+            gy[..., i] = m.deta(xi, eta)
 
         return gx, gy
 
     # ========================================================
-    # vertex modes (EXACT MATCH TO MATLAB)
+    # vertex modes
     # ========================================================
 
     def _build_vertex_modes(self):
 
-        # φ1 = 1/2*(1+η)
+        # φ1
         self.modes.append(DubinerMode(
             phi=lambda xi, eta: 0.5 * (1 + eta),
             dxi=lambda xi, eta: 0.0,
             deta=lambda xi, eta: 0.5
         ))
 
-        # φ2 = 1/4*(1-ξ)*(1-η)
+        # φ2
         self.modes.append(DubinerMode(
             phi=lambda xi, eta: 0.25 * (1 - xi) * (1 - eta),
             dxi=lambda xi, eta: -0.25 * (1 - eta),
             deta=lambda xi, eta: -0.25 * (1 - xi)
         ))
 
-        # φ3 = 1/4*(1+ξ)*(1-η)
+        # φ3
         self.modes.append(DubinerMode(
             phi=lambda xi, eta: 0.25 * (1 + xi) * (1 - eta),
             dxi=lambda xi, eta: 0.25 * (1 - eta),
@@ -124,7 +109,7 @@ class DubinerBasis:
         ))
 
     # ========================================================
-    # edge modes (A_m, B_m, C_m)
+    # edge modes (stable formulation)
     # ========================================================
 
     def _build_edge_modes(self):
@@ -132,75 +117,68 @@ class DubinerBasis:
         for m in range(1, self.p):
 
             P = jacobi_coeffs_float(m - 1, 2, 2)
-            Pp = poly_derivative(P)
+            dP = poly_derivative(P)
 
-            P_eval = lambda x: poly_eval(P, x)
-            dP_eval = lambda x: poly_eval(Pp, x)
+            P_f = lambda x, P=P: poly_eval(P, x)
+            dP_f = lambda x, dP=dP: poly_eval(dP, x)
 
-            # ----------------------------
-            # A_m
-            # ----------------------------
+            # -------------------------
+            # A-type (xi-direction)
+            # -------------------------
             self.modes.append(DubinerMode(
 
-                phi=lambda xi, eta, m=m, P=P_eval:
-                    ((1 + xi)/2) * ((1 - xi)/2)
+                phi=lambda xi, eta, m=m, P=P_f:
+                    0.25 * (1 - xi**2) * P(xi) * ((1 - eta)/2)**(m + 1),
+
+                dxi=lambda xi, eta, m=m, P=P_f, dP=dP_f:
+                    (
+                        -0.5 * xi * P(xi)
+                        + 0.25 * (1 - xi**2) * dP(xi)
+                    ) * ((1 - eta)/2)**(m + 1),
+
+                deta=lambda xi, eta, m=m, P=P_f:
+                    -0.5 * (m + 1)
+                    * 0.25 * (1 - xi**2)
                     * P(xi)
-                    * ((1 - eta)/2)**(m + 1),
-
-                dxi=lambda xi, eta, m=m, P=P_eval, dP=dP_eval:
-                    0.5 * ((1 - xi)/2) * P(xi) * ((1 - eta)/2)**(m+1)
-                    - 0.5 * ((1 + xi)/2) * P(xi) * ((1 - eta)/2)**(m+1)
-                    + ((1 + xi)/2) * ((1 - xi)/2) * dP(xi) * ((1 - eta)/2)**(m+1),
-
-                deta=lambda xi, eta, m=m, P=P_eval:
-                    -0.5 * (m+1) * ((1 - eta)/2)**m
-                    * ((1 + xi)/2) * ((1 - xi)/2) * P(xi)
+                    * ((1 - eta)/2)**m
             ))
 
-            # ----------------------------
-            # B_m
-            # ----------------------------
+            # -------------------------
+            # B-type (eta-symmetric)
+            # -------------------------
             self.modes.append(DubinerMode(
 
-                phi=lambda xi, eta, m=m, P=P_eval:
-                    ((1 + xi)/2)
-                    * ((1 - eta)/2) * ((1 + eta)/2)
-                    * P(eta),
+                phi=lambda xi, eta, m=m, P=P_f:
+                    0.25 * (1 + xi) * (1 - eta**2) * P(eta),
 
-                dxi=lambda xi, eta, m=m, P=P_eval:
-                    0.5 * ((1 - eta)/2) * ((1 + eta)/2) * P(eta),
+                dxi=lambda xi, eta, m=m, P=P_f:
+                    0.25 * (1 - eta**2) * P(eta),
 
-                deta=lambda xi, eta, m=m, P=P_eval, dP=dP_eval:
-                    ((1 + xi)/2) * (
-                        -0.5 * eta * P(eta)
-                        + ((1 - eta**2)/4) * (m+3) * dP(eta)
+                deta=lambda xi, eta, m=m, P=P_f, dP=dP_f:
+                    0.25 * (1 + xi) * (
+                        -2 * eta * P(eta) + (1 - eta**2) * dP(eta)
                     )
             ))
 
-            # ----------------------------
-            # C_m
-            # ----------------------------
+            # -------------------------
+            # C-type (antisymmetric)
+            # -------------------------
             self.modes.append(DubinerMode(
 
-                phi=lambda xi, eta, m=m, P=P_eval:
-                    (-1)**(m-1)
-                    * ((1 - xi)/2)
-                    * ((1 - eta)/2) * ((1 + eta)/2)
-                    * P(eta),
+                phi=lambda xi, eta, m=m, P=P_f:
+                    (-1)**m * 0.25 * (1 - xi) * (1 - eta**2) * P(eta),
 
-                dxi=lambda xi, eta, m=m, P=P_eval:
-                    (-1)**(m-1) * (-0.5)
-                    * ((1 - eta)/2) * ((1 + eta)/2) * P(eta),
+                dxi=lambda xi, eta, m=m, P=P_f:
+                    (-1)**m * (-0.25) * (1 - eta**2) * P(eta),
 
-                deta=lambda xi, eta, m=m, P=P_eval, dP=dP_eval:
-                    (-1)**(m-1) * ((1 - xi)/2) * (
-                        -0.5 * eta * P(eta)
-                        + ((1 - eta**2)/4) * (m+3) * dP(eta)
+                deta=lambda xi, eta, m=m, P=P_f, dP=dP_f:
+                    (-1)**m * 0.25 * (1 - xi) * (
+                        -2 * eta * P(eta) + (1 - eta**2) * dP(eta)
                     )
             ))
 
     # ========================================================
-    # interior modes
+    # interior modes (stable tensor form)
     # ========================================================
 
     def _build_interior_modes(self):
@@ -214,37 +192,32 @@ class DubinerBasis:
                 dPxi = poly_derivative(Pxi)
                 dPeta = poly_derivative(Peta)
 
-                Pxi_f = lambda x: poly_eval(Pxi, x)
-                dPxi_f = lambda x: poly_eval(dPxi, x)
+                Pxi_f = lambda x, Pxi=Pxi: poly_eval(Pxi, x)
+                dPxi_f = lambda x, dPxi=dPxi: poly_eval(dPxi, x)
 
-                Peta_f = lambda x: poly_eval(Peta, x)
-                dPeta_f = lambda x: poly_eval(dPeta, x)
+                Peta_f = lambda x, Peta=Peta: poly_eval(Peta, x)
+                dPeta_f = lambda x, dPeta=dPeta: poly_eval(dPeta, x)
 
                 self.modes.append(DubinerMode(
 
-                    phi=lambda xi, eta, m=m:
-                        ((1 - xi)/2) * ((1 + xi)/2)
+                    phi=lambda xi, eta, m=m, n=n:
+                        0.25
+                        * (1 - xi**2)
+                        * (1 - eta**2)
                         * Pxi_f(xi)
-                        * ((1 - eta)/2)**(m+2)
-                        * ((1 + eta)/2)
                         * Peta_f(eta),
 
-                    dxi=lambda xi, eta, m=m:
-                        (
-                            (-0.5*(1 + xi) + 0.5*(1 - xi)) * Pxi_f(xi)
-                            + ((1 - xi)/2)*((1 + xi)/2)*dPxi_f(xi)
-                        )
-                        * ((1 - eta)/2)**(m+2)
-                        * ((1 + eta)/2)
-                        * Peta_f(eta),
+                    dxi=lambda xi, eta, m=m, n=n:
+                        0.25 * (
+                            -2 * xi * (1 - eta**2) * Pxi_f(xi) * Peta_f(eta)
+                            + (1 - xi**2) * (1 - eta**2) * dPxi_f(xi) * Peta_f(eta)
+                        ),
 
-                    deta=lambda xi, eta, m=m:
-                        ((1 - xi)/2)*((1 + xi)/2)*Pxi_f(xi)
-                        * (
-                            -0.5*(m+2)*((1 - eta)/2)**(m+1)
-                            * ((1 + eta)/2)*Peta_f(eta)
-                            + 0.5*((1 - eta)/2)**(m+2)*Peta_f(eta)
-                            + ((1 - eta)/2)**(m+2)*dPeta_f(eta)
+                    deta=lambda xi, eta, m=m, n=n:
+                        0.25 * (
+                            (1 - xi**2)
+                            * (-2 * eta * Peta_f(eta) + (1 - eta**2) * dPeta_f(eta))
+                            * Pxi_f(xi)
                         )
                 ))
 

@@ -1,72 +1,65 @@
 import numpy as np
+from localtfem.quadrature.lglnodes import lglnodes
+from localtfem.geometry.reference_triangle import (
+    square_to_triangle,
+    jacobian,
+    reference_to_physical,
+)
+from localtfem.modified_dubiner.dubiner_sym import (
+    dubiner_basis_lambdified
+)
 
+def triangle_area(verts):
+    A = np.array(verts[0])
+    B = np.array(verts[1])
+    C = np.array(verts[2])
 
-def eval_rhs(func, verts, area, basis_eval, quad_x, quad_w):
-    """
-    Python equivalent of Eval_RHS.m
+    return 0.5 * abs(
+        (B[0] - A[0]) * (C[1] - A[1]) -
+        (B[1] - A[1]) * (C[0] - A[0])
+    )
 
-    Parameters
-    ----------
-    func : callable (x,y)
-    verts : (3,2) triangle vertices
-    area  : float
-    basis_eval : function (xi, eta) -> (n_modes,)
-    quad_x : LGL nodes
-    quad_w : LGL weights
-    """
+def eval_rhs(func,      # (x,y) -> R
+             verts,     # np.array( [ [x_A, y_A], [x_B, y_B], [x_C, y_C] ] )
+             p):         # polynomial basis order
 
-    # ------------------------------------------------------------
-    # affine map (reference triangle)
-    # ------------------------------------------------------------
+    # let's define area and get phis
+    
+    area = triangle_area(verts)
+    
+    basis = dubiner_basis_lambdified(p)
+    n_basis = len(basis)
 
-    def Xmap(r, s):
-        return 0.5 * (verts[2,0] - verts[1,0]) * r \
-             + 0.5 * (verts[0,0] - verts[1,0]) * s \
-             + 0.5 * (verts[0,0] + verts[2,0])
+    [lgl_nodes,lgl_weights] = lglnodes(15);
 
-    def Ymap(r, s):
-        return 0.5 * (verts[2,1] - verts[1,1]) * r \
-             + 0.5 * (verts[0,1] - verts[1,1]) * s \
-             + 0.5 * (verts[0,1] + verts[2,1])
+    XI, ETA = np.meshgrid(lgl_nodes, lgl_nodes, indexing="xy")
+    W = np.outer(lgl_weights, lgl_weights)
 
-    # ------------------------------------------------------------
-    # tensor-product quadrature
-    # ------------------------------------------------------------
+    Phi = np.stack([phi(XI, ETA) for phi in basis], axis=-1)
 
-    XI, ETA = np.meshgrid(quad_x, quad_x, indexing="xy")
-    W = np.outer(quad_w, quad_w)
-
-    # collapse map
-    R = 0.5 * (XI + 1) * (1 - ETA) - 1
+    #   Xmap = @(r,s) (1/2)*(Verts(3,1)-Verts(2,1)).*r ...
+    #           + (1/2)*(Verts(1,1)-Verts(2,1)).*s + (1/2)*(Verts(1,1)+Verts(3,1));
+    #   Ymap = @(r,s) (1/2)*(Verts(3,2)-Verts(2,2)).*r ...
+    #           + (1/2)*(Verts(1,2)-Verts(2,2)).*s + (1/2)*(Verts(1,2)+Verts(3,2));
+    
+    A, B, C = verts
     S = ETA
+    R = 0.5 * (XI + 1.0) * (1.0 - ETA) - 1.0
+    
+    X = ( 0.5 * (C[0] - B[0]) * R
+        + 0.5 * (A[0] - B[0]) * S
+        + 0.5 * (A[0] + C[0]) )
+    
+    Y = (  0.5 * (C[1] - B[1]) * R
+        + 0.5 * (A[1] - B[1]) * S
+        + 0.5 * (A[1] + C[1]) )
+    
+    F0 = func(X, Y)
 
-    # physical coordinates
-    X = Xmap(R, S)
-    Y = Ymap(R, S)
+    J = jacobian(XI, ETA)   # ( 1 - eta )/2.0
+    # (area / 2.0) is the determinant of the affine map from 
+    #   the reference triangle (r,s) to the physical triangle (x,y)
 
-    # forcing
-    F = func(X, Y)
-
-    # ------------------------------------------------------------
-    # basis evaluation
-    # ------------------------------------------------------------
-
-    Phi = basis_eval(XI, ETA)  # shape (nq, nq, n_modes)
-
-    # ------------------------------------------------------------
-    # Jacobian factor (collapsed triangle)
-    # ------------------------------------------------------------
-
-    jac = (area / 4.0) * (1 - ETA)
-
-    # ------------------------------------------------------------
-    # RHS assembly
-    # ------------------------------------------------------------
-
-    n_modes = Phi.shape[-1]
-    rhs = np.zeros(n_modes)
-
-    for i in range(n_modes):
-        rhs[i] = np.sum(F * Phi[..., i] * W * jac)
+    rhs = (area / 2.0) * np.sum( F0[..., None] * Phi * W[..., None] * J[..., None], axis=(0, 1) )
 
     return rhs
