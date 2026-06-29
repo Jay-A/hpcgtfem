@@ -54,7 +54,7 @@ def triangle_to_square(r, s):
     Map reference triangle coordinates (r, s)
     back to collapsed square coordinates (xi, eta).
     """
-    s[s == 1.0] = 1.0 - 1e-16
+    # s[s == 1.0] = 1.0 - 1e-16
     xi = 2.0 * (r + 1.0) / (1.0 - s) - 1.0
     eta = s
     return xi, eta

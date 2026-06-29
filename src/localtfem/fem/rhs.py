@@ -1,5 +1,6 @@
 import numpy as np
 from localtfem.quadrature.lglnodes import lglnodes
+from localtfem.quadrature.lgrnodes import lgrnodes
 from localtfem.geometry.reference_triangle import (
     square_to_triangle,
     jacobian,
@@ -31,9 +32,10 @@ def eval_rhs(func,      # (x,y) -> R
     n_basis = len(basis)
 
     [lgl_nodes,lgl_weights] = lglnodes(15);
+    [lgr_nodes,lgr_weights,_] = lgrnodes(15);
 
-    XI, ETA = np.meshgrid(lgl_nodes, lgl_nodes, indexing="xy")
-    W = np.outer(lgl_weights, lgl_weights)
+    XI, ETA = np.meshgrid(lgl_nodes, lgr_nodes, indexing="xy")
+    W = np.outer(lgr_weights, lgl_weights)   # order here is important for correct broadcasting semantics
 
     Phi = np.stack([phi(XI, ETA) for phi in basis], axis=-1)
 
