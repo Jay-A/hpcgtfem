@@ -1,12 +1,17 @@
 """
 structured_mesh.py
 
-Fully Python-native structured triangular mesh on [-1,1]^2.
+Structured triangular mesh on [-1,1]^2.
 
-Key properties:
-- 0-based indexing everywhere
-- edges store: [nodeA, nodeB, elem_left, elem_right]
-- DOFMap-compatible WITHOUT MATLAB assumptions
+CLEAN TOPOLOGY FORMAT (matches updated Mesh):
+
+edges:
+    nodes: (M,2)
+    elements: adjacency list (list of element indices)
+
+No signed integers.
+No boundary sentinels.
+Boundary is inferred from adjacency size.
 """
 
 from __future__ import annotations
@@ -17,9 +22,10 @@ from .mesh import Mesh
 
 def structured_mesh(level: int) -> Mesh:
 
-    # ------------------------------------------------------------
-    # grid
-    # ------------------------------------------------------------
+    # ============================================================
+    # GRID
+    # ============================================================
+
     num_nodes_x = 2 ** (level + 1) + 1
     num_nodes_y = num_nodes_x
 
@@ -31,13 +37,14 @@ def structured_mesh(level: int) -> Mesh:
     def node_id(ix, iy):
         return iy * num_nodes_x + ix
 
-    # ------------------------------------------------------------
-    # elements
-    # ------------------------------------------------------------
+    # ============================================================
+    # ELEMENTS
+    # ============================================================
+
     elements = []
     areas = []
 
-    step = 2.0 / (num_nodes_x - 1)
+    h = 2.0 / (num_nodes_x - 1)
 
     for iy in range(1, num_nodes_y):
         for ix in range(num_nodes_x - 1):
@@ -53,51 +60,58 @@ def structured_mesh(level: int) -> Mesh:
             elements.append(e1)
             elements.append(e2)
 
-            area = 0.5 * step * step
+            area = 0.5 * h * h
             areas.extend([area, area])
 
-    elements = np.array(elements, dtype=int)
+    elements = np.asarray(elements, dtype=int)
+    areas = np.asarray(areas, dtype=float)
 
-    # ------------------------------------------------------------
-    # edges (0-based adjacency)
-    # ------------------------------------------------------------
+    num_elements = elements.shape[0]
+
+    # ============================================================
+    # EDGE CONSTRUCTION (PURE TOPOLOGY)
+    # ============================================================
+
     edge_dict = {}
-    edges = []
+    edge_nodes = []
+    edge_adj = []
 
-    def add_edge(a, b, elem):
+    def add_edge(a, b, elem_id):
 
         key = (a, b) if a < b else (b, a)
 
         if key not in edge_dict:
-            edge_dict[key] = len(edges)
-            edges.append([key[0], key[1], elem, -1])  # -1 = boundary placeholder
+            edge_dict[key] = len(edge_nodes)
+            edge_nodes.append([key[0], key[1]])
+            edge_adj.append([elem_id])
         else:
             idx = edge_dict[key]
-            edges[idx][3] = elem  # second element
+            edge_adj[idx].append(elem_id)
 
-    # ------------------------------------------------------------
-    # build edges
-    # ------------------------------------------------------------
     for elem_id, tri in enumerate(elements):
 
-        edges_local = [
+        local_edges = [
             (tri[0], tri[1]),
             (tri[1], tri[2]),
             (tri[2], tri[0]),
         ]
 
-        for a, b in edges_local:
+        for a, b in local_edges:
             add_edge(a, b, elem_id)
 
-    edges = np.array(edges, dtype=int)
+    edges = {
+        "nodes": np.asarray(edge_nodes, dtype=int),
+        "elements": edge_adj,  # list of adjacency lists
+    }
 
-    # boundary edges: only one adjacent element
-    boundary = np.where(edges[:, 3] == -1)[0]
+    # ============================================================
+    # BOUNDARY (NOT STORED, DERIVED IN MESH)
+    # ============================================================
 
     return Mesh(
         nodes=nodes,
         elements=elements,
-        areas=np.array(areas, dtype=float),
+        areas=areas,
         edges=edges,
-        boundary=boundary,
+        boundary=None,
     )
